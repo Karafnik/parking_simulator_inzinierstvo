@@ -619,7 +619,7 @@ function renderMap() {
       lock + '<span class="n">' + sp.id + '</span><span class="tags">' + tags + '</span><span class="plate">' + esc(plate || STATE_TXT[st]) + '</span></button>';
   };
   $('map').innerHTML = rows[0].map(cell).join('') +
-    '<div class="lane"><b>Vjazd ▶</b><span>výťah pri miestach 5 až 8</span><b>◀ Výjazd</b></div>' + rows[1].map(cell).join('');
+    '<div class="lane"><b>Vjazd ▶</b><span>výťah pri miestach 5 až 8 a 17 až 20</span><b>◀ Výjazd</b></div>' + rows[1].map(cell).join('');
   $('map').querySelectorAll('.spot').forEach(b => b.onclick = () => { sel = +b.dataset.spot; renderMap(); renderDetail(); });
   const o = occupancy();
   $('occPct').textContent = Math.round(o * 100) + ' %';
