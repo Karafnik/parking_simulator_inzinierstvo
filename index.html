@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulátor parkovacej garáže</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* Layout: pôdorys garáže vľavo, ovládanie (zákazník / správca / zariadenia) vpravo, denník dole */
+:root{
+  --bg:#e9ecea; --surface:#ffffff; --surface2:#f3f5f3; --ink:#1a2330; --muted:#5a6573; --line:#d3d9d5;
+  --accent:#0b5cab; --accent-ink:#ffffff; --signal:#f2b400;
+  --free:#1b7f55; --free-bg:#d9f0e4; --res:#a56a00; --res-bg:#fbe9c2; --occ:#b8352b; --occ-bg:#f8d9d5; --off:#6d7683; --off-bg:#dfe3e6;
+  --font-display:"Barlow Condensed","Arial Narrow",sans-serif; --font-body:"IBM Plex Sans",system-ui,sans-serif; --font-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12171d; --surface:#1b222b; --surface2:#222b36; --ink:#e7ecf1; --muted:#9aa6b4; --line:#33404e;
+  --accent:#5aa2f0; --accent-ink:#0c1620; --signal:#f2b400;
+  --free:#55c995; --free-bg:#17372b; --res:#e9b64d; --res-bg:#3a2e12; --occ:#f08a80; --occ-bg:#40201d; --off:#9aa4b0; --off-bg:#2a323b; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#12171d; --surface:#1b222b; --surface2:#222b36; --ink:#e7ecf1; --muted:#9aa6b4; --line:#33404e;
+  --accent:#5aa2f0; --accent-ink:#0c1620; --signal:#f2b400;
+  --free:#55c995; --free-bg:#17372b; --res:#e9b64d; --res-bg:#3a2e12; --occ:#f08a80; --occ-bg:#40201d; --off:#9aa4b0; --off-bg:#2a323b; color-scheme:dark;}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.45}
+h1,h2,h3{font-family:var(--font-display);margin:0;letter-spacing:.2px;text-wrap:balance}
+h2{font-size:22px} h3{font-size:18px;margin-bottom:6px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--surface2);border-radius:6px;padding:6px 11px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.warn{border-color:var(--occ);color:var(--occ)}
+button:disabled{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:3px solid var(--signal);outline-offset:1px}
+input,select{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted)}
+label.chk{flex-direction:row;align-items:center;gap:6px;color:var(--ink);font-size:14px}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.top{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;padding:12px 18px;background:var(--ink);color:var(--bg)}
+.brand{display:flex;gap:12px;align-items:center}
+.brand h1{font-size:26px;color:#fff} .brand p{margin:0;font-size:12px;color:#b8c2cd}
+.pbadge{display:grid;place-items:center;width:42px;height:42px;border-radius:8px;background:var(--accent);color:#fff;font:700 28px var(--font-display)}
+.clock{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.clock .lbl{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#b8c2cd}
+.clock strong{font:600 22px var(--font-mono);color:var(--signal)}
+.clock label{color:#b8c2cd;flex-direction:row;align-items:center;gap:6px}
+.clock button{background:#2a3644;color:#fff;border-color:#415165}
+.grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:14px;padding:14px 18px;align-items:start}
+@media(max-width:960px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.stack{display:flex;flex-direction:column;gap:10px}
+.muted{color:var(--muted);font-size:13px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin:6px 0 10px}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px;border:1px solid currentColor}
+.lot{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:10px;overflow-x:auto}
+.lotgrid{display:grid;grid-template-columns:repeat(12,minmax(44px,1fr));gap:5px;min-width:560px}
+.lane{grid-column:1/-1;height:34px;border-radius:4px;background:repeating-linear-gradient(90deg,transparent 0 22px,var(--line) 22px 34px);display:flex;align-items:center;justify-content:space-between;padding:0 8px;font-size:11px;color:var(--muted);position:relative}
+.lane b{background:var(--surface2);padding:0 6px;border-radius:3px;color:var(--ink)}
+.spot{position:relative;height:66px;border-radius:6px;border:2px solid;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:2px;font-size:11px;background:var(--surface)}
+.spot .n{font:700 17px var(--font-display)}
+.spot .tags{display:flex;gap:3px;font:600 9px var(--font-mono)}
+.spot .tags i{font-style:normal;border-radius:3px;padding:0 3px;background:var(--ink);color:var(--surface)}
+.spot .plate{font:500 9px var(--font-mono);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spot.s-free{color:var(--free);background:var(--free-bg)} .spot.s-res{color:var(--res);background:var(--res-bg)}
+.spot.s-occ{color:var(--occ);background:var(--occ-bg)} .spot.s-off{color:var(--off);background:repeating-linear-gradient(45deg,var(--off-bg) 0 6px,transparent 6px 12px)}
+.spot.sel{box-shadow:0 0 0 3px var(--signal)}
+.spot .lock{position:absolute;top:1px;right:3px;font:600 9px var(--font-mono)}
+.occ{margin:12px 0 4px}
+.bar{position:relative;height:16px;border-radius:8px;background:var(--surface2);border:1px solid var(--line);overflow:hidden}
+.bar>span{display:block;height:100%;background:var(--free)} .bar.hot>span{background:var(--occ)}
+.bar .thr{position:absolute;top:-2px;bottom:-2px;left:80%;width:2px;background:var(--ink)}
+.detail{margin-top:10px;border:1px dashed var(--line);border-radius:8px;padding:10px;background:var(--surface2)}
+.tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin:0 -4px 12px;padding:0 4px 8px}
+.tabs button{white-space:nowrap;border-radius:16px;padding:5px 12px}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.panelwrap{max-height:760px;overflow-y:auto;padding-right:4px}
+.item{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface2);display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.item .main{flex:1 1 220px}
+.pill{display:inline-block;border-radius:10px;padding:0 8px;font-size:12px;font-weight:600;border:1px solid currentColor}
+.pill.ok{color:var(--free)} .pill.wait{color:var(--res)} .pill.bad{color:var(--occ)} .pill.off{color:var(--off)}
+.quote{border-left:4px solid var(--signal);background:var(--surface2);padding:8px 10px;border-radius:0 8px 8px 0}
+.quote table{border-collapse:collapse;width:100%} .quote td{padding:1px 0} .quote td:last-child{text-align:right}
+.err{color:var(--occ);font-weight:600} .okmsg{color:var(--free);font-weight:600}
+.days{display:flex;gap:6px;flex-wrap:wrap}
+.ramp{display:flex;align-items:center;gap:8px}
+.arm{width:90px;height:8px;border-radius:4px;background:var(--ink);transform-origin:left center;transition:transform .5s}
+.arm.open{transform:rotate(-70deg)} .arm.fault{background:var(--occ)}
+.log{max-height:300px;overflow-y:auto;font-size:13px;display:flex;flex-direction:column;gap:2px}
+.log div{display:grid;grid-template-columns:96px 92px 1fr;gap:8px;padding:3px 6px;border-radius:4px}
+.log div:nth-child(odd){background:var(--surface2)}
+.log .t{font-family:var(--font-mono);color:var(--muted);font-size:12px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.chips button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+#journal{margin:0 18px 18px}
+.modal{position:fixed;inset:0;background:rgba(10,15,22,.6);display:none;place-items:center;z-index:10;padding:16px}
+.modal.on{display:grid}
+.modal .box{background:var(--surface);border-radius:12px;padding:20px;max-width:380px;width:100%;border:2px solid var(--accent)}
+.box .amt{font:700 34px var(--font-display);margin:6px 0 12px}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:8px 14px;border-radius:8px;z-index:11;max-width:92vw;display:none}
+@media(prefers-reduced-motion:reduce){.arm{transition:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="pbadge" aria-hidden="true">P</span><div><h1>Parkovací systém B</h1><p>Simulátor garáže podľa DNR v1.1</p></div></div>
+  <div class="clock">
+    <div><span class="lbl">Simulovaný čas</span><strong id="clock"></strong></div>
+    <button data-adv="5">+5 min</button><button data-adv="15">+15 min</button><button data-adv="60">+1 h</button><button data-adv="1440">+1 deň</button>
+    <label>Skok na čas <input type="datetime-local" id="setTime"></label><button id="btnSetTime">Použiť</button>
+  </div>
+</header>
+
+<main class="grid">
+  <section class="card" aria-labelledby="hMap">
+    <h2 id="hMap">Pôdorys garáže</h2>
+    <div class="legend">
+      <span><i class="sw" style="color:var(--free);background:var(--free-bg)"></i>Voľné</span>
+      <span><i class="sw" style="color:var(--res);background:var(--res-bg)"></i>Rezervované</span>
+      <span><i class="sw" style="color:var(--occ);background:var(--occ-bg)"></i>Obsadené (senzor)</span>
+      <span><i class="sw" style="color:var(--off)"></i>Nedostupné</span>
+      <span>L veľké miesto, EV nabíjanie, V/Z vyhradené pre skupinu</span>
+    </div>
+    <div class="lot"><div class="lotgrid" id="map"></div></div>
+    <div class="occ"><div class="row" style="justify-content:space-between"><strong>Obsadenosť <span id="occPct" class="mono"></span></strong><span class="muted">Hranica prirážky 80 %</span></div>
+      <div class="bar" id="occBar" role="img" aria-label="Obsadenosť garáže"><span id="occFill"></span><i class="thr"></i></div></div>
+    <div class="detail" id="detail"></div>
+  </section>
+
+  <section class="card" aria-labelledby="hCtl">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <h2 id="hCtl">Ovládanie</h2>
+      <label>Prihlásený zákazník <select id="user"></select></label>
+    </div>
+    <div id="userInfo" class="muted" style="margin-bottom:8px"></div>
+    <div class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-tab="find" aria-selected="true">Vyhľadať a rezervovať</button>
+      <button role="tab" data-tab="repeat" aria-selected="false">Opakovaná rezervácia</button>
+      <button role="tab" data-tab="mine" aria-selected="false">Moje rezervácie</button>
+      <button role="tab" data-tab="pkg" aria-selected="false">Predplatné</button>
+      <button role="tab" data-tab="alert" aria-selected="false">Upozornenia</button>
+      <button role="tab" data-tab="admin" aria-selected="false">Správca</button>
+      <button role="tab" data-tab="dev" aria-selected="false">Zariadenia</button>
+    </div>
+    <div class="panelwrap">
+
+    <div data-pane="find" class="stack">
+      <div class="row">
+        <label>Príchod <input type="datetime-local" id="sFrom"></label>
+        <label>Odchod <input type="datetime-local" id="sTo"></label>
+      </div>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="sLarge">Veľké miesto</label>
+        <label class="chk"><input type="checkbox" id="sExit">Blízko východu</label>
+        <label class="chk"><input type="checkbox" id="sLift">Blízko výťahu</label>
+        <label class="chk"><input type="checkbox" id="sEv">S nabíjaním</label>
+      </div>
+      <div class="row"><button class="primary" id="btnSearch">Hľadať voľné miesta</button><button id="btnAuto">Vybrať automaticky</button></div>
+      <div id="results" class="stack"></div>
+      <div id="resForm" class="stack" hidden>
+        <h3>Rezervácia miesta <span id="chosenNo"></span></h3>
+        <div class="row">
+          <label>EČV vozidla <input id="rEcv" class="mono" maxlength="8" size="9"></label>
+          <label>Úhrada <select id="payMethod"></select></label>
+        </div>
+        <div id="quote" class="quote"></div>
+        <div class="row"><button class="primary" id="btnReserve">Potvrdiť a uhradiť</button><span id="resMsg"></span></div>
+      </div>
+    </div>
+
+    <div data-pane="repeat" class="stack" hidden>
+      <p class="muted" style="margin:0">Systém pre každý výskyt vyberie najvhodnejšie voľné miesto a uvedie výskyty, ktoré sa vytvoriť nedajú (F.04, I.03).</p>
+      <div class="days" id="days"></div>
+      <div class="row">
+        <label>Od <input type="time" id="rpFrom" value="09:00"></label>
+        <label>Do <input type="time" id="rpTo" value="17:00"></label>
+        <label>Začiatok <input type="date" id="rpStart"></label>
+        <label>Týždňov <input type="number" id="rpWeeks" min="1" max="8" value="2" style="width:70px"></label>
+      </div>
+      <label class="chk"><input type="checkbox" id="rpEv">S nabíjaním</label>
+      <div class="row"><button class="primary" id="btnRpCheck">Skontrolovať dostupnosť</button></div>
+      <div id="rpOut" class="stack"></div>
+    </div>
+
+    <div data-pane="mine" class="stack" hidden><div id="myRes" class="stack"></div><h3>Notifikácie (SMS, push)</h3><div id="myNotif" class="stack"></div></div>
+
+    <div data-pane="pkg" class="stack" hidden>
+      <div id="myPkg" class="stack"></div>
+      <h3>Zakúpiť balík</h3>
+      <div class="row"><label>Typ <select id="pkgType"></select></label><button class="primary" id="btnBuyPkg">Kúpiť cez platobnú bránu</button></div>
+      <p class="muted" style="margin:0">Ceny balíkov sú ilustračné. Aj držiteľ predplatného si musí miesto rezervovať (E.17).</p>
+    </div>
+
+    <div data-pane="alert" class="stack" hidden>
+      <p class="muted" style="margin:0">Upozornenie sa dá nastaviť, keď sú všetky miesta zvoleného typu obsadené alebo rezervované (UC7).</p>
+      <div class="row">
+        <label>Typ miesta <select id="alType"><option value="large">Veľké miesto</option><option value="ev">Miesto s nabíjaním</option></select></label>
+        <label>Kanál <select id="alChan"><option value="push">Push</option><option value="SMS">SMS</option></select></label>
+        <button class="primary" id="btnAlert">Nastaviť upozornenie</button>
+      </div>
+      <div id="alList" class="stack"></div>
+    </div>
+
+    <div data-pane="admin" class="stack" hidden>
+      <p class="muted" style="margin:0"><span class="pill ok">Správca prihlásený</span> Funkcie správy sú dostupné iba oprávnenému Správcovi (N.06).</p>
+      <h3>Dostupnosť miesta</h3>
+      <div class="row"><label>Miesto č. <input type="number" id="adSpot" min="1" max="24" value="5" style="width:80px"></label>
+        <button id="btnAdOff">Označiť nedostupné</button><button id="btnAdOn">Označiť dostupné</button></div>
+      <h3>Vyhradiť miesta pre skupinu</h3>
+      <div class="row">
+        <label>Čísla miest <input id="grSpots" placeholder="napr. 19,20" size="10"></label>
+        <label>Skupina <select id="grGroup"><option>VIP</option><option>zamestnanci</option></select></label>
+        <label>Od <input type="datetime-local" id="grFrom"></label><label>Do <input type="datetime-local" id="grTo"></label>
+        <button class="primary" id="btnGroup">Vyhradiť</button>
+      </div>
+      <p class="muted" style="margin:0">Existujúce rezervácie ostanú nezmenené (F.08). Každá zmena sa zapíše do denníka s časom a Správcom.</p>
+      <div id="grList" class="stack"></div>
+    </div>
+
+    <div data-pane="dev" class="stack" hidden>
+      <h3>Kamera EČV a rampy</h3>
+      <div class="row"><label>EČV pred rampou <input id="camEcv" class="mono" maxlength="8" size="9" list="ecvs"></label><datalist id="ecvs"></datalist>
+        <button class="primary" id="btnIn">K vjazdovej rampe</button><button id="btnOut">K výjazdovej rampe</button></div>
+      <div class="row"><label class="chk"><input type="checkbox" id="camFail">Kamera EČV nerozpozná</label><label class="chk"><input type="checkbox" id="rampFault">Rampa nepotvrdí otvorenie</label></div>
+      <div class="row"><div class="ramp"><span>Vjazd</span><span class="arm" id="armIn"></span></div><div class="ramp"><span>Výjazd</span><span class="arm" id="armOut"></span></div></div>
+      <h3>Nabíjacie stanice (F.10)</h3><div id="chargers" class="stack"></div>
+      <h3>Vozidlá v garáži</h3><div id="inside" class="stack"></div>
+      <h3>Nástroje simulácie</h3>
+      <div class="row"><button id="btnFill">Zaplniť garáž nad 80 %</button><button id="btnRace">Test súbehu (30 žiadostí)</button><button class="warn" id="btnReset">Obnoviť simuláciu</button></div>
+      <p class="muted" style="margin:0">Senzor miesta prepneš v detaile miesta pod pôdorysom (UC14). Platbu potvrdzuješ v okne platobnej brány.</p>
+    </div>
+    </div>
+  </section>
+</main>
+
+<section class="card" id="guide" style="margin:0 18px 14px"><details open><summary><strong>Čo si vyskúšať</strong></summary>
+<ol class="muted" style="margin:8px 0 0;padding-left:20px;display:grid;gap:4px">
+<li><b>Rezervácia a cena (F.01, F.02, F.05).</b> Na karte Vyhľadať a rezervovať stlač Vybrať automaticky, potom Potvrdiť a uhradiť a v okne brány Zaplatiť.</li>
+<li><b>Vjazd 15 minút vopred (F.11).</b> Rezervuj s príchodom o 16 minút neskôr, v Zariadeniach zadaj svoje EČV a stlač vjazd. Systém ho zamietne. Cez Skok na čas posuň o 1 minútu a skús znova.</li>
+<li><b>Prekročený čas (UC13).</b> Po vjazde posuň čas o 70 minút za koniec rezervácie a stlač výjazd. Doplatok je 8 € a rampa sa otvorí aj pri zamietnutej platbe.</li>
+<li><b>Prirážka nad 80 % (F.05).</b> V Zariadeniach stlač Zaplniť garáž nad 80 %. Odhad ceny sa zvýši ×1,5.</li>
+<li><b>Presun na iné miesto (F.12).</b> Martin má rezerváciu na mieste 4 od 8:40, no auto BA999ZZ tam stojí do 8:30. Posuň čas o 30 minút a v jeho Moje rezervácie uvidíš nové miesto a push.</li>
+<li><b>Upozornenie na voľné miesto (F.07).</b> Prepni senzory miest 11, 12, 23 a 24 na obsadené, nastav upozornenie na nabíjanie a jedno z miest uvoľni.</li>
+<li><b>Opakovaná rezervácia (F.04).</b> Označ pondelok a stredu a nabíjanie. V stredu 18. 11. sú všetky nabíjacie miesta rezervované, takže ten výskyt systém neponúkne.</li>
+<li><b>Súbeh (N.05) a balík (I.09).</b> Stlač Test súbehu. Jakubov balík má 5 h, rezervácia na 6 h z balíka sa zamietne.</li>
+</ol></details></section>
+<section class="card" id="journal" aria-labelledby="hLog">
+  <h2 id="hLog">Denník systému</h2>
+  <div class="chips" id="chips"></div>
+  <div class="log" id="log"></div>
+</section>
+
+<div class="modal" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateT">
+  <div class="box"><h3 id="gateT">Platobná brána (simulácia)</h3><p class="muted" id="gateP"></p><div class="amt mono" id="gateAmt"></div>
+    <p class="muted">Systém odovzdá bráne iba sumu a účel. Údaje o karte neuchováva (FW.04).</p>
+    <div class="row"><button class="primary" id="gateOk">Zaplatiť</button><button class="warn" id="gateNo">Zamietnuť platbu</button></div></div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+'use strict';
+/* ===== Logika systému (bez DOM): pravidlá z DNR v1.1 ===== */
+const MIN = 60000, H = 3600000, DAY = 86400000;
+const RULE = { rate: 2, thr: 0.8, sur: 1.5, over: 4, ev: 1 }; // ilustračné hodnoty z kap. 6
+const EARLY = 15 * MIN; // vjazd najskôr 15 min pred začiatkom (F.11)
+const PKG_TYPES = {
+  h10: { name: 'Balík 10 hodín', unit: 'h', range: 10, months: 3, price: 18 },
+  d3:  { name: 'Balík 3 dni', unit: 'd', range: 3, months: 1, price: 30 },
+  m:   { name: 'Mesačné predplatné (40 h)', unit: 'h', range: 40, months: 1, price: 60 },
+  y:   { name: 'Ročné predplatné (400 h)', unit: 'h', range: 400, months: 12, price: 500 }
+};
+const USERS = [
+  { id: 'jakub', name: 'Jakub Karaffa', ecv: 'BA123AB', group: null },
+  { id: 'sona', name: 'Soňa Štefanová', ecv: 'KE456CD', group: 'VIP' },
+  { id: 'martin', name: 'Martin Sarybekian', ecv: 'NR789EF', group: 'zamestnanci' }
+];
+const LARGE = [1, 2, 3, 13, 14, 15], EVSPOTS = [11, 12, 23, 24];
+let S;
+
+const r2 = x => Math.round(x * 100) / 100;
+const eur = x => r2(x).toFixed(2).replace('.', ',') + ' €';
+const at = (d, h, m) => new Date(2026, 10, d, h, m || 0).getTime();
+const overlap = (a1, a2, b1, b2) => a1 < b2 && b1 < a2;
+const user = id => USERS.find(u => u.id === id);
+
+function newState() {
+  const spots = [];
+  for (let i = 1; i <= 24; i++) {
+    const col = (i - 1) % 12, ev = EVSPOTS.includes(i);
+    spots.push({ id: i, row: i <= 12 ? 0 : 1, col, large: LARGE.includes(i), ev,
+      distExit: 5 + col * 3, nearLift: col >= 4 && col <= 7,
+      available: true, reserved: null, sensor: false, sensorT: null, chargerOut: false });
+  }
+  S = { now: at(16, 8, 0), spots, res: [], inside: [], pay: [], pkgs: [], use: [], alerts: [], notif: [], log: [], passages: [], seq: 100, userId: 'jakub' };
+  seed();
+  return S;
+}
+function seed() {
+  const sp = id => S.spots[id - 1];
+  const add = (spot, ecv, from, to, occupied, uid) => {
+    S.res.push({ id: ++S.seq, spot, ecv, user: uid || null, from, to, status: occupied ? 'aktivna' : 'potvrdena', price: 0, occ: 0, ev: sp(spot).ev, paid: 'brana', hist: [] });
+    if (occupied) { sp(spot).sensor = true; sp(spot).sensorT = S.now - 20 * MIN; S.inside.push({ ecv, resId: S.seq, t: S.now - 30 * MIN }); }
+  };
+  [1,2,3,5,6,7,8,9,10,13,14,16,17].forEach((s, i) => add(s, 'ZA' + (100 + i) + 'XX', at(16, 7, 30), at(16, 12 + (i % 4) * 2, 0), true));
+  add(4, 'BA999ZZ', at(16, 7, 40), at(16, 8, 30), true);          // dlhšie stojaci, uvoľní až po konci rezervácie
+  add(15, 'TT321AA', at(16, 7, 45), at(16, 15, 0), false);
+  add(18, 'PO777BB', at(16, 7, 50), at(16, 13, 0), false);
+  S.res.push({ id: ++S.seq, spot: 4, ecv: 'NR789EF', user: 'martin', from: at(16, 8, 40), to: at(16, 12, 0), status: 'potvrdena', price: 8, occ: 0.71, ev: false, paid: 'brana', hist: [] });
+  EVSPOTS.forEach((s, i) => S.res.push({ id: ++S.seq, spot: s, ecv: 'EV' + (500 + i) + 'ZZ', user: null, from: at(18, 10, 0), to: at(18, 18, 0), status: 'potvrdena', price: 0, occ: 0, ev: true, paid: 'brana', hist: [] }));
+  sp(20).reserved = { group: 'VIP', from: at(16, 0, 0), to: at(23, 0, 0) };
+  sp(19).reserved = { group: 'zamestnanci', from: at(16, 0, 0), to: at(23, 0, 0) };
+  S.pkgs.push({ id: 1, user: 'jakub', type: 'h10', unit: 'h', orig: 10, left: 5, from: at(1, 0, 0), to: at(31, 23, 59) });
+  log('Systém', 'Simulácia spustená. Garáž má 24 miest, 4 majú nabíjaciu stanicu.');
+}
+function log(tag, text) { S.log.unshift({ t: S.now, tag, text }); if (S.log.length > 300) S.log.pop(); }
+function notify(uid, type, text, channel) {
+  if (!uid) return;
+  S.notif.unshift({ user: uid, type, text, channel: channel || 'push', t: S.now, status: 'doručené' });
+  log('Notifikácia', (channel || 'push').toUpperCase() + ' pre ' + user(uid).name + ': ' + text);
+}
+
+/* ---- stav miest a obsadenosť ---- */
+const live = r => r.status === 'potvrdena' || r.status === 'aktivna';
+function resAt(spotId, t) { return S.res.find(r => r.spot === spotId && live(r) && r.from <= t && t < r.to); }
+function spotState(sp) {
+  if (!sp.available) return 'off';
+  if (sp.sensor) return 'occ';
+  if (resAt(sp.id, S.now)) return 'res';
+  return 'free';
+}
+function occupancy(t) {
+  t = t == null ? S.now : t;
+  const n = S.spots.filter(sp => sp.available && (sp.sensor || resAt(sp.id, t))).length;
+  return n / S.spots.length;
+}
+function chargerState(sp) { return sp.chargerOut ? 'out' : (sp.sensor ? 'busy' : 'free'); }
+
+/* ---- vyhľadávanie (F.01) ---- */
+function spotCheck(sp, from, to, u, o) {
+  o = o || {};
+  if (!sp.available) return 'Miesto je nedostupné';
+  if (o.ev && !sp.ev) return 'Miesto nemá nabíjaciu stanicu';
+  if (o.ev && sp.chargerOut) return 'Nabíjacia stanica je mimo prevádzky';
+  if (o.large && !sp.large) return 'Miesto nie je veľké';
+  if (sp.reserved && overlap(from, to, sp.reserved.from, sp.reserved.to) && (!u || sp.reserved.group !== u.group)) return 'Vyhradené pre skupinu ' + sp.reserved.group;
+  if (S.res.some(r => r.spot === sp.id && live(r) && overlap(from, to, r.from, r.to))) return 'Miesto má v tom čase inú rezerváciu';
+  if (from <= S.now && S.now < to && sp.sensor) return 'Senzor hlási miesto ako obsadené';
+  return null;
+}
+function search(p, u) {
+  return S.spots.filter(sp => !spotCheck(sp, p.from, p.to, u, p) &&
+    (!p.exit || sp.distExit <= 17) && (!p.lift || sp.nearLift));
+}
+/* ---- automatický výber (F.03): najviac splnených kritérií, pri rovnosti najnižšie číslo ---- */
+function autoPick(p, u, exclude) {
+  const c = search({ from: p.from, to: p.to, large: p.large, ev: p.ev }, u).filter(sp => sp.id !== exclude);
+  let best = null, bs = -1;
+  c.forEach(sp => {
+    const sc = (p.exit && sp.distExit <= 17 ? 1 : 0) + (p.lift && sp.nearLift ? 1 : 0) + (p.evNear && sp.ev ? 1 : 0)
+      - (sp.ev && !p.ev && !p.evNear ? 0.4 : 0) - (sp.large && !p.large ? 0.2 : 0); // vzácne miesta až naposledy
+    if (sc > bs) { bs = sc; best = sp; }
+  });
+  return best;
+}
+
+/* ---- cena (F.05) ---- */
+function quote(from, to, ev) {
+  const occ = occupancy(), hours = (to - from) / H;
+  const rate = RULE.rate * (occ >= RULE.thr ? RULE.sur : 1);
+  const base = r2(hours * rate), evc = ev ? r2(hours * RULE.ev) : 0;
+  return { occ, hours, rate, surcharge: occ >= RULE.thr, base, evc, total: r2(base + evc) };
+}
+/* ---- rezervácie (F.02, I.01, I.02, I.04, I.05, I.07, I.08) ---- */
+function validate(o) {
+  const u = user(o.uid), sp = S.spots[o.spot - 1];
+  if (!sp) return 'Neznáme miesto';
+  if (!(o.from < o.to)) return 'Začiatok musí predchádzať koncu rezervácie (I.04)';
+  if (o.from < S.now) return 'Rezerváciu nemožno vytvoriť do minulosti';
+  if (!/^[A-Z0-9]{5,8}$/.test(o.ecv)) return 'Zadaj EČV bez medzier (5 až 8 znakov)';
+  const why = spotCheck(sp, o.from, o.to, u, { ev: o.ev });
+  if (why) return why;
+  if (S.res.some(r => live(r) && r.ecv === o.ecv && overlap(o.from, o.to, r.from, r.to))) return 'Vozidlo ' + o.ecv + ' už má v tom čase inú rezerváciu (I.02)';
+  return null;
+}
+function commit(o, payInfo) {
+  const err = validate(o);                      // znovu pri zápise, aby súbeh nevytvoril dve rezervácie
+  if (err) return { ok: false, err };
+  const q = quote(o.from, o.to, o.ev);
+  const r = { id: ++S.seq, spot: o.spot, ecv: o.ecv, user: o.uid, from: o.from, to: o.to, status: 'potvrdena',
+    price: q.total, occ: q.occ, ev: !!o.ev, paid: payInfo.method, hist: [] };
+  S.res.push(r);
+  S.pay.push({ id: ++S.seq, res: r.id, pkg: null, amount: q.total, purpose: 'rezervácia', status: payInfo.method === 'balik' ? 'z balíka' : 'úspešná', t: S.now, txn: payInfo.txn || '—' });
+  log('Systém', 'Rezervácia č. ' + r.id + ': miesto ' + o.spot + ', ' + o.ecv + ', cena ' + eur(q.total) + ' (obsadenosť ' + Math.round(q.occ * 100) + ' %).');
+  notify(o.uid, 'potvrdenie rezervácie', 'Rezervácia č. ' + r.id + ' potvrdená, miesto ' + o.spot + '.', 'push');
+  return { ok: true, res: r };
+}
+function failedPayment(o, amount, purpose, txn) {
+  S.pay.push({ id: ++S.seq, res: null, pkg: null, amount, purpose, status: 'neúspešná', t: S.now, txn });
+  log('Platba', 'Platba ' + eur(amount) + ' (' + purpose + ') bola zamietnutá. Rezervácia ani balík nevznikli.');
+}
+let txnSeq = 7000;
+const newTxn = () => 'TX-' + (++txnSeq);
+
+/* ---- predplatné (F.06, I.09) ---- */
+const pkgNeed = (p, from, to) => p.unit === 'd' ? Math.ceil((to - from) / H / 24) : r2((to - from) / H);
+function pkgCheck(p, from, to) {
+  if (!p) return 'Balík neexistuje';
+  if (from < p.from || to > p.to) return 'Rezervácia je mimo platnosti balíka';
+  const need = pkgNeed(p, from, to);
+  if (p.left < need) return 'Zostávajúci rozsah balíka (' + p.left + (p.unit === 'd' ? ' d' : ' h') + ') nestačí, treba ' + need + (p.unit === 'd' ? ' d' : ' h');
+  return null;
+}
+function reserveWithPackage(o, pkgId) {
+  const p = S.pkgs.find(x => x.id === pkgId && x.user === o.uid);
+  const e1 = validate(o); if (e1) return { ok: false, err: e1 };
+  const e2 = pkgCheck(p, o.from, o.to); if (e2) return { ok: false, err: e2 };
+  const res = commit(o, { method: 'balik' });
+  if (!res.ok) return res;
+  const need = pkgNeed(p, o.from, o.to);
+  p.left = r2(p.left - need);
+  S.use.push({ pkg: p.id, res: res.res.id, amount: need, t: S.now });
+  S.pay[S.pay.length - 1].pkg = p.id;
+  log('Platba', 'Úhrada z balíka č. ' + p.id + ': odpočítaných ' + need + (p.unit === 'd' ? ' d' : ' h') + ', zostáva ' + p.left + '.');
+  return res;
+}
+function buyPackage(uid, type, paid, txn) {
+  const t = PKG_TYPES[type];
+  if (!paid) { failedPayment(null, t.price, 'predplatený balík', txn); return { ok: false, err: 'Platba bola zamietnutá, balík nevznikol.' }; }
+  const d = new Date(S.now), to = new Date(d.getFullYear(), d.getMonth() + t.months, d.getDate(), 23, 59).getTime();
+  const p = { id: ++S.seq, user: uid, type, unit: t.unit, orig: t.range, left: t.range, from: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(), to };
+  S.pkgs.push(p);
+  S.pay.push({ id: ++S.seq, res: null, pkg: p.id, amount: t.price, purpose: 'predplatený balík', status: 'úspešná', t: S.now, txn });
+  log('Platba', user(uid).name + ' kúpil(a) ' + t.name + ' za ' + eur(t.price) + '.');
+  return { ok: true, pkg: p };
+}
+
+/* ---- opakovaná rezervácia (F.04, I.03) ---- */
+function planRepeat(uid, ecv, p) {
+  const u = user(uid), out = [], start = new Date(p.start + 'T00:00:00').getTime();
+  const [fh, fm] = p.tFrom.split(':').map(Number), [th, tm] = p.tTo.split(':').map(Number);
+  for (let i = 0; i < p.weeks * 7; i++) {
+    const d = new Date(start + i * DAY);
+    if (!p.days.includes(d.getDay())) continue;
+    const from = new Date(d.getFullYear(), d.getMonth(), d.getDate(), fh, fm).getTime();
+    const to = new Date(d.getFullYear(), d.getMonth(), d.getDate(), th, tm).getTime();
+    const o = { uid, ecv, from, to, ev: p.ev, spot: 0 };
+    if (!(from < to)) { out.push({ from, to, ok: false, why: 'Začiatok nepredchádza koncu' }); continue; }
+    if (from < S.now) { out.push({ from, to, ok: false, why: 'Výskyt je v minulosti' }); continue; }
+    if (S.res.some(r => live(r) && r.ecv === ecv && overlap(from, to, r.from, r.to))) { out.push({ from, to, ok: false, why: 'Vozidlo už má v tom čase rezerváciu' }); continue; }
+    const sp = autoPick({ from, to, ev: p.ev }, u);
+    if (!sp) { out.push({ from, to, ok: false, why: p.ev ? 'Žiadne voľné miesto s nabíjaním' : 'Žiadne voľné miesto' }); continue; }
+    o.spot = sp.id; out.push({ from, to, ok: true, spot: sp.id, price: quote(from, to, p.ev).total, o });
+  }
+  return out;
+}
+/* ---- automatizovaný vjazd a výjazd (UC12, UC13, F.11, I.06) ---- */
+function entry(ecv, o) {
+  o = o || {};
+  const add = (res, result, why) => S.passages.unshift({ t: S.now, dir: 'vjazd', ecv: ecv || '?', res, result, why });
+  if (o.camFail || !ecv) { add(null, 'zamietnutý', 'EČV sa nepodarilo rozpoznať'); log('Prejazd', 'Vjazd: EČV nebolo rozpoznané, rampa sa neotvorí.'); return { ok: false, why: 'EČV nebolo rozpoznané' }; }
+  if (S.inside.some(v => v.ecv === ecv)) { add(null, 'zamietnutý', 'Vozidlo je už v garáži'); log('Prejazd', 'Vjazd ' + ecv + ' zamietnutý: vozidlo je už v garáži.'); return { ok: false, why: 'Vozidlo je už v garáži' }; }
+  const r = S.res.find(x => x.ecv === ecv && x.status === 'potvrdena' && x.from - EARLY <= S.now && S.now < x.to);
+  if (!r) {
+    const early = S.res.find(x => x.ecv === ecv && x.status === 'potvrdena' && x.from - EARLY > S.now && S.now < x.to);
+    const why = early ? 'Príchod je viac ako 15 minút pred začiatkom rezervácie' : 'Pre EČV neexistuje platná rezervácia';
+    add(null, 'zamietnutý', why); log('Prejazd', 'Vjazd ' + ecv + ' zamietnutý: ' + why + '.'); return { ok: false, why };
+  }
+  if (o.rampFault) { log('Prejazd', 'Vjazd ' + ecv + ': rampa nepotvrdila otvorenie, vjazd sa nezaznamenal.'); return { ok: false, why: 'Rampa nepotvrdila otvorenie', fault: true }; }
+  r.status = 'aktivna';
+  S.inside.push({ ecv, resId: r.id, t: S.now });
+  const sp = S.spots[r.spot - 1]; sp.sensor = true; sp.sensorT = S.now;
+  add(r.id, 'povolený', 'Platná rezervácia č. ' + r.id);
+  log('Prejazd', 'Vjazd ' + ecv + ' povolený, rezervácia č. ' + r.id + ', miesto ' + r.spot + '.');
+  return { ok: true, res: r };
+}
+function exitCar(ecv, o) {
+  o = o || {};
+  const add = (res, result, why, over, fee) => S.passages.unshift({ t: S.now, dir: 'výjazd', ecv: ecv || '?', res, result, why, over, fee });
+  if (o.camFail || !ecv) { add(null, 'zamietnutý', 'EČV sa nepodarilo rozpoznať'); log('Prejazd', 'Výjazd: EČV nebolo rozpoznané. Rampu otvorí prevádzkovateľ mimo systému.'); return { ok: false, why: 'EČV nebolo rozpoznané' }; }
+  const v = S.inside.find(x => x.ecv === ecv);
+  if (!v) { add(null, 'zamietnutý', 'Vjazd vozidla sa nenašiel'); log('Prejazd', 'Výjazd ' + ecv + ': vjazd sa nenašiel, rampu otvorí prevádzkovateľ mimo systému.'); return { ok: false, why: 'Vjazd vozidla sa nenašiel' }; }
+  if (o.rampFault) { log('Prejazd', 'Výjazd ' + ecv + ': rampa nepotvrdila otvorenie, výjazd sa nezaznamenal.'); return { ok: false, why: 'Rampa nepotvrdila otvorenie', fault: true }; }
+  const r = S.res.find(x => x.id === v.resId);
+  const over = S.now > r.to ? Math.ceil((S.now - r.to) / MIN) : 0, fee = over ? Math.ceil(over / 60) * RULE.over : 0;
+  S.inside = S.inside.filter(x => x !== v);
+  const sp = S.spots[r.spot - 1]; sp.sensor = false; sp.sensorT = S.now;
+  if (r.status === 'aktivna') r.status = 'ukoncena';
+  add(r.id, 'povolený', fee ? 'Prekročený čas ' + over + ' min' : 'Bez prekročenia', over, fee);
+  log('Prejazd', 'Výjazd ' + ecv + ' povolený' + (fee ? ', prekročený čas ' + over + ' min, doplatok ' + eur(fee) : '') + '.');
+  checkAlerts();
+  return { ok: true, res: r, over, fee };
+}
+function payOvertime(ecv, fee, paid, txn) {
+  S.pay.push({ id: ++S.seq, res: null, pkg: null, amount: fee, purpose: 'prekročený čas', status: paid ? 'úspešná' : 'neúspešná', t: S.now, txn });
+  log('Platba', 'Doplatok ' + eur(fee) + ' za prekročený čas (' + ecv + '): ' + (paid ? 'uhradený.' : 'neuhradený, výjazd tým nie je dotknutý.'));
+}
+
+/* ---- ukončenie rezervácie a presun na iné miesto (UC19, F.12) ---- */
+function relocate(r) {
+  const u = r.user ? user(r.user) : null;
+  const old = S.spots[r.spot - 1];
+  const alt = autoPick({ from: r.from, to: r.to, ev: r.ev, large: false }, u, r.spot);
+  if (!alt) { log('Systém', 'Rezervácia č. ' + r.id + ': miesto ' + r.spot + ' je obsadené a náhradné miesto sa nenašlo.'); return; }
+  r.hist.push(r.spot); r.spot = alt.id;
+  log('Systém', 'Miesto ' + old.id + ' ostalo obsadené, rezervácia č. ' + r.id + ' presunutá na miesto ' + alt.id + '.');
+  notify(r.user, 'zmena miesta', 'Miesto ' + old.id + ' je ešte obsadené. Nové miesto: ' + alt.id + '.', 'push');
+}
+function tick() {
+  S.res.filter(r => live(r) && r.to <= S.now).forEach(r => {
+    r.status = 'ukoncena'; log('Systém', 'Rezervácia č. ' + r.id + ' (' + r.ecv + ') ukončená, miesto ' + r.spot + ' je uvoľnené pre ďalšie rezervácie.');
+  });
+  S.res.filter(r => r.status === 'potvrdena' && r.from - EARLY <= S.now && S.now < r.to).forEach(r => {
+    const sp = S.spots[r.spot - 1];
+    const legit = S.res.some(x => x !== r && x.spot === r.spot && x.status === 'aktivna' && x.from <= S.now && S.now < x.to);
+    if (sp.sensor && !legit) relocate(r);
+  });
+  checkAlerts();
+}
+function advance(minutes) {
+  const target = S.now + minutes * MIN;
+  while (S.now < target) { S.now = Math.min(S.now + 5 * MIN, target); tick(); }
+}
+
+/* ---- upozornenia na voľné miesto (F.07, UC7, UC18) ---- */
+function freeNow(sp, type, u) {
+  if (!sp.available || sp.sensor || resAt(sp.id, S.now)) return false;
+  if (sp.reserved && sp.reserved.from <= S.now && S.now < sp.reserved.to && (!u || sp.reserved.group !== u.group)) return false;
+  return type === 'ev' ? sp.ev && !sp.chargerOut : sp.large;
+}
+function addAlert(uid, type, channel) {
+  const u = user(uid);
+  if (S.spots.some(sp => freeNow(sp, type, u))) return { ok: false, err: 'Voľné miesto tohto typu už existuje, upozornenie netreba.' };
+  S.alerts.push({ id: ++S.seq, user: uid, type, channel, active: true, firedAt: null });
+  log('Systém', u.name + ' nastavil(a) upozornenie: ' + (type === 'ev' ? 'miesto s nabíjaním' : 'veľké miesto') + ' (' + channel + ').');
+  return { ok: true };
+}
+function describe(sp) {
+  return [sp.large ? 'veľké' : 'štandardné', sp.distExit + ' m od východu', sp.nearLift ? 'pri výťahu' : 'ďaleko od výťahu', sp.ev ? 's nabíjacou stanicou' : 'bez nabíjania'].join(', ');
+}
+function checkAlerts() {
+  S.alerts.filter(a => a.active).forEach(a => {
+    const u = user(a.user), sp = S.spots.find(s => freeNow(s, a.type, u));
+    if (!sp) return;
+    a.active = false; a.firedAt = S.now;
+    notify(a.user, 'upozornenie na voľné miesto', 'Uvoľnilo sa miesto ' + sp.id + ' (' + describe(sp) + ').', a.channel);
+  });
+}
+
+/* ---- zariadenia a správa (UC10, UC11, UC14, UC15) ---- */
+function setSensor(id, occupied) {
+  const sp = S.spots[id - 1]; sp.sensor = occupied; sp.sensorT = S.now;
+  log('Senzor', 'Miesto ' + id + ': ' + (occupied ? 'obsadené' : 'voľné') + ' (údaj zo senzora).');
+  tick();
+}
+function setCharger(id, out) {
+  S.spots[id - 1].chargerOut = out;
+  log('Senzor', 'Nabíjacia stanica pri mieste ' + id + ': ' + (out ? 'mimo prevádzky' : 'v prevádzke') + '.');
+  checkAlerts();
+}
+function setAvailable(id, on) {
+  S.spots[id - 1].available = on;
+  log('Audit', 'Správca zmenil dostupnosť miesta ' + id + ': ' + (on ? 'dostupné' : 'nedostupné') + '. Existujúce rezervácie ostávajú nezmenené.');
+  checkAlerts();
+}
+function reserveGroup(ids, group, from, to) {
+  if (!(from < to)) return { ok: false, err: 'Začiatok musí predchádzať koncu' };
+  const bad = ids.filter(i => !(i >= 1 && i <= 24));
+  if (!ids.length || bad.length) return { ok: false, err: 'Zadaj čísla miest 1 až 24, oddelené čiarkou' };
+  ids.forEach(i => { S.spots[i - 1].reserved = { group, from, to }; });
+  log('Audit', 'Správca vyhradil miesta ' + ids.join(', ') + ' pre skupinu ' + group + '. Existujúce rezervácie ostávajú nezmenené.');
+  return { ok: true };
+}
+function clearGroup(id) { S.spots[id - 1].reserved = null; log('Audit', 'Správca zrušil vyhradenie miesta ' + id + '.'); checkAlerts(); }
+function fillGarage() {
+  S.spots.filter(sp => sp.available && !sp.sensor && !resAt(sp.id, S.now) && !sp.reserved).forEach(sp => { if (occupancy() < 0.85) { sp.sensor = true; sp.sensorT = S.now; } });
+  log('Senzor', 'Garáž zaplnená, obsadenosť ' + Math.round(occupancy() * 100) + ' %.');
+}
+function raceTest(n) { // N.05: viac súbežných žiadostí o to isté miesto a čas
+  const from = S.now + 2 * H, to = S.now + 3 * H, spot = S.spots.find(sp => !spotCheck(sp, from, to, user('jakub'), {}) && !spotCheck(sp, from, to, user('sona'), {}) && !sp.reserved);
+  if (!spot) return { ok: 0, fail: 0, spot: null };
+  let ok = 0, fail = 0;
+  for (let i = 0; i < n; i++) { const r = commit({ uid: null, ecv: 'RC' + String(1000 + i), spot: spot.id, from, to, ev: false }, { method: 'brana', txn: newTxn() }); r.ok ? ok++ : fail++; }
+  log('Systém', 'Test súbehu: ' + n + ' žiadostí o miesto ' + spot.id + ', vznikla ' + ok + ' rezervácia, ' + fail + ' zamietnutých (PREKRYTIE).');
+  return { ok, fail, spot: spot.id };
+}
+if (typeof module !== 'undefined') module.exports = { newState, S: () => S, quote, validate, commit, reserveWithPackage, buyPackage, planRepeat, entry, exitCar, advance, addAlert, setSensor, setCharger, search, autoPick, occupancy, raceTest, USERS, at, MIN, H, fillGarage, setAvailable, reserveGroup, pkgCheck };
+/* ===== Používateľské rozhranie ===== */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const fmt = t => new Date(t).toLocaleString('sk-SK', { weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+const toLocal = t => { const d = new Date(t); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const fromLocal = v => v ? new Date(v).getTime() : NaN;
+const STATE_TXT = { free: 'voľné', res: 'rezervované', occ: 'obsadené', off: 'nedostupné' };
+let sel = 1, chosen = null, found = [], tab = 'find', filter = 'Všetko', rpPlan = null;
+const curUser = () => user(S.userId);
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = 'none', 3600); }
+function gate(amount, purpose) {
+  return new Promise(res => {
+    $('gateP').textContent = 'Účel platby: ' + purpose; $('gateAmt').textContent = eur(amount);
+    $('gate').classList.add('on'); $('gateOk').focus();
+    const done = ok => { $('gate').classList.remove('on'); $('gateOk').onclick = $('gateNo').onclick = null; res(ok); };
+    $('gateOk').onclick = () => done(true); $('gateNo').onclick = () => done(false);
+  });
+}
+
+function renderMap() {
+  const rows = [[], []];
+  S.spots.forEach(sp => rows[sp.row].push(sp));
+  const cell = sp => {
+    const st = spotState(sp), r = S.res.find(x => x.spot === sp.id && live(x) && x.from <= S.now && S.now < x.to);
+    const tags = (sp.large ? '<i>L</i>' : '') + (sp.ev ? '<i>' + (sp.chargerOut ? 'EV!' : 'EV') + '</i>' : '');
+    const lock = sp.reserved && sp.reserved.to > S.now ? '<span class="lock">' + (sp.reserved.group === 'VIP' ? 'V' : 'Z') + '</span>' : '';
+    const plate = st === 'occ' || st === 'res' ? (r ? r.ecv : '') : '';
+    return '<button class="spot s-' + st + (sel === sp.id ? ' sel' : '') + '" data-spot="' + sp.id + '" aria-label="Miesto ' + sp.id + ', ' + STATE_TXT[st] + '">' +
+      lock + '<span class="n">' + sp.id + '</span><span class="tags">' + tags + '</span><span class="plate">' + esc(plate || STATE_TXT[st]) + '</span></button>';
+  };
+  $('map').innerHTML = rows[0].map(cell).join('') +
+    '<div class="lane"><b>Vjazd ▶</b><span>výťah pri miestach 5 až 8</span><b>◀ Výjazd</b></div>' + rows[1].map(cell).join('');
+  $('map').querySelectorAll('.spot').forEach(b => b.onclick = () => { sel = +b.dataset.spot; renderMap(); renderDetail(); });
+  const o = occupancy();
+  $('occPct').textContent = Math.round(o * 100) + ' %';
+  $('occFill').style.width = Math.round(o * 100) + '%';
+  $('occBar').classList.toggle('hot', o >= RULE.thr);
+}
+function renderDetail() {
+  const sp = S.spots[sel - 1], st = spotState(sp);
+  const next = S.res.filter(r => r.spot === sp.id && live(r) && r.to > S.now).sort((a, b) => a.from - b.from).slice(0, 3);
+  const ch = sp.ev ? ' Nabíjacia stanica: <strong>' + { free: 'voľná', busy: 'obsadená', out: 'mimo prevádzky' }[chargerState(sp)] + '</strong>.' : '';
+  $('detail').innerHTML =
+    '<div class="row" style="justify-content:space-between"><h3>Miesto ' + sp.id + ' <span class="pill ' + { free: 'ok', res: 'wait', occ: 'bad', off: 'off' }[st] + '">' + STATE_TXT[st] + '</span></h3>' +
+    '<span class="muted">Senzor: ' + (sp.sensor ? 'obsadené' : 'voľné') + (sp.sensorT ? ' (údaj z ' + fmt(sp.sensorT) + ')' : ', bez údaja') + '</span></div>' +
+    '<p style="margin:4px 0">' + esc(describe(sp)) + '.' + ch + (sp.reserved ? ' Vyhradené pre skupinu <strong>' + sp.reserved.group + '</strong> do ' + fmt(sp.reserved.to) + '.' : '') + '</p>' +
+    (next.length ? '<div class="muted">Rezervácie: ' + next.map(r => esc(r.ecv) + ' ' + fmt(r.from) + ' až ' + fmt(r.to)).join(' · ') + '</div>' : '<div class="muted">Žiadne ďalšie rezervácie.</div>') +
+    '<div class="row" style="margin-top:8px"><button id="dSensor">Senzor: ' + (sp.sensor ? 'miesto sa uvoľnilo' : 'auto zaparkovalo') + '</button>' +
+    '<button id="dPick" class="primary">Vybrať na rezerváciu</button></div>';
+  $('dSensor').onclick = () => { setSensor(sp.id, !sp.sensor); refresh(); };
+  $('dPick').onclick = () => { chosen = sp.id; showTab('find'); showForm(); };
+}
+const pillRes = r => ({ potvrdena: '<span class="pill wait">potvrdená</span>', aktivna: '<span class="pill ok">vozidlo v garáži</span>', ukoncena: '<span class="pill off">ukončená</span>' }[r.status]);
+function renderLists() {
+  const u = curUser();
+  $('userInfo').innerHTML = 'EČV <span class="mono">' + u.ecv + '</span> · skupina: ' + (u.group || 'bez skupiny') + ' · notifikácie: push, SMS';
+  const mine = S.res.filter(r => r.user === u.id).sort((a, b) => b.from - a.from);
+  $('myRes').innerHTML = mine.length ? mine.map(r => '<div class="item"><div class="main"><strong>Miesto ' + r.spot + '</strong> <span class="mono">' + esc(r.ecv) + '</span> ' + pillRes(r) +
+    '<div class="muted">' + fmt(r.from) + ' až ' + fmt(r.to) + ' · ' + eur(r.price) + (r.paid === 'balik' ? ' z balíka' : '') + (r.occ ? ' · obsadenosť pri potvrdení ' + Math.round(r.occ * 100) + ' %' : '') + (r.hist.length ? ' · presunutá z miesta ' + r.hist.join(', ') : '') + '</div></div></div>').join('') + '<p class="muted">Potvrdenú rezerváciu nemožno zrušiť ani zmeniť, ukončí sa uplynutím času (FW.06).</p>' : '<p class="muted">Zatiaľ nemáš žiadnu rezerváciu.</p>';
+  const nf = S.notif.filter(n => n.user === u.id);
+  $('myNotif').innerHTML = nf.length ? nf.map(n => '<div class="item"><div class="main"><span class="pill ok">' + n.channel.toUpperCase() + '</span> <strong>' + n.type + '</strong><div>' + esc(n.text) + '</div></div><span class="muted mono">' + fmt(n.t) + '</span></div>').join('') : '<p class="muted">Zatiaľ žiadne notifikácie.</p>';
+  const pk = S.pkgs.filter(p => p.user === u.id);
+  $('myPkg').innerHTML = pk.length ? pk.map(p => '<div class="item"><div class="main"><strong>' + PKG_TYPES[p.type].name + '</strong><div class="muted">platí ' + new Date(p.from).toLocaleDateString('sk-SK') + ' až ' + new Date(p.to).toLocaleDateString('sk-SK') + '</div></div><div><strong class="mono">' + p.left + ' / ' + p.orig + (p.unit === 'd' ? ' dní' : ' h') + '</strong></div></div>').join('') : '<p class="muted">Nemáš žiadny predplatený balík.</p>';
+  const al = S.alerts.filter(a => a.user === u.id);
+  $('alList').innerHTML = al.length ? al.map(a => '<div class="item"><div class="main">' + (a.type === 'ev' ? 'Miesto s nabíjaním' : 'Veľké miesto') + ' · ' + a.channel + '</div>' + (a.active ? '<span class="pill wait">čaká</span>' : '<span class="pill ok">odoslané ' + fmt(a.firedAt) + '</span>') + '</div>').join('') : '<p class="muted">Nemáš nastavené žiadne upozornenie.</p>';
+  $('payMethod').innerHTML = '<option value="brana">Platobná brána</option>' + pk.map(p => '<option value="' + p.id + '">Z balíka: ' + PKG_TYPES[p.type].name + ' (zostáva ' + p.left + (p.unit === 'd' ? ' d' : ' h') + ')</option>').join('');
+  $('grList').innerHTML = S.spots.filter(sp => sp.reserved).map(sp => '<div class="item"><div class="main">Miesto <strong>' + sp.id + '</strong> pre skupinu <strong>' + sp.reserved.group + '</strong><div class="muted">' + fmt(sp.reserved.from) + ' až ' + fmt(sp.reserved.to) + '</div></div><button data-clr="' + sp.id + '">Zrušiť vyhradenie</button></div>').join('') || '<p class="muted">Žiadne vyhradené miesta.</p>';
+  $('grList').querySelectorAll('[data-clr]').forEach(b => b.onclick = () => { clearGroup(+b.dataset.clr); refresh(); });
+  $('chargers').innerHTML = S.spots.filter(sp => sp.ev).map(sp => '<div class="item"><div class="main">Miesto ' + sp.id + ': <span class="pill ' + { free: 'ok', busy: 'wait', out: 'bad' }[chargerState(sp)] + '">' + { free: 'voľná', busy: 'obsadená', out: 'mimo prevádzky' }[chargerState(sp)] + '</span></div><button data-ch="' + sp.id + '">' + (sp.chargerOut ? 'Uviesť do prevádzky' : 'Vyradiť z prevádzky') + '</button></div>').join('');
+  $('chargers').querySelectorAll('[data-ch]').forEach(b => b.onclick = () => { const sp = S.spots[+b.dataset.ch - 1]; setCharger(sp.id, !sp.chargerOut); refresh(); });
+  $('inside').innerHTML = S.inside.length ? S.inside.map(v => { const r = S.res.find(x => x.id === v.resId); return '<div class="item"><div class="main"><span class="mono">' + esc(v.ecv) + '</span> · miesto ' + r.spot + '<div class="muted">rezervácia do ' + fmt(r.to) + ', vstup ' + fmt(v.t) + '</div></div><button data-use="' + esc(v.ecv) + '">Použiť EČV</button></div>'; }).join('') : '<p class="muted">V garáži nie je žiadne vozidlo.</p>';
+  $('inside').querySelectorAll('[data-use]').forEach(b => b.onclick = () => { $('camEcv').value = b.dataset.use; });
+  $('ecvs').innerHTML = S.res.filter(r => r.user).map(r => '<option value="' + r.ecv + '">').join('');
+}
+function renderLog() {
+  const tags = ['Všetko', 'Prejazd', 'Platba', 'Notifikácia', 'Senzor', 'Audit', 'Systém'];
+  $('chips').innerHTML = tags.map(t => '<button aria-pressed="' + (t === filter) + '" data-f="' + t + '">' + t + '</button>').join('');
+  $('chips').querySelectorAll('button').forEach(b => b.onclick = () => { filter = b.dataset.f; renderLog(); });
+  $('log').innerHTML = S.log.filter(l => filter === 'Všetko' || l.tag === filter).slice(0, 80).map(l => '<div><span class="t">' + fmt(l.t) + '</span><span><strong>' + l.tag + '</strong></span><span>' + esc(l.text) + '</span></div>').join('');
+}
+function refresh() {
+  $('clock').textContent = fmt(S.now);
+  renderMap(); renderDetail(); renderLists(); renderLog();
+  $('armIn').classList.remove('fault'); $('armOut').classList.remove('fault');
+}
+/* ===== Akcie ===== */
+function showTab(t) {
+  tab = t;
+  document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+  document.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== t);
+}
+const params = () => ({ from: fromLocal($('sFrom').value), to: fromLocal($('sTo').value), large: $('sLarge').checked, exit: $('sExit').checked, lift: $('sLift').checked, ev: $('sEv').checked });
+function renderResults(msg) {
+  const el = $('results');
+  if (!found.length) { el.innerHTML = '<p class="err">' + (msg || 'Žiadne voľné miesto nespĺňa zadané kritériá.') + '</p>'; return; }
+  const p = params(), q = quote(p.from, p.to, p.ev);
+  el.innerHTML = (msg ? '<p class="okmsg">' + msg + '</p>' : '') + '<div class="muted">Nájdených miest: ' + found.length + ' · odhad ' + eur(q.total) + ' za ' + q.hours.toLocaleString('sk-SK') + ' h</div>' +
+    found.map(sp => '<div class="item"><div class="main"><strong>Miesto ' + sp.id + '</strong><div class="muted">' + esc(describe(sp)) + '</div></div><button data-pick="' + sp.id + '">Vybrať</button></div>').join('');
+  el.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { chosen = +b.dataset.pick; sel = chosen; refresh(); showForm(); });
+}
+function doSearch() {
+  const p = params();
+  if (!(p.from < p.to)) { found = []; return renderResults('Začiatok musí predchádzať koncu rezervácie (I.04).'); }
+  found = search(p, curUser()); $('resForm').hidden = true; renderResults();
+}
+function doAuto() {
+  const p = params();
+  if (!(p.from < p.to)) { found = []; return renderResults('Začiatok musí predchádzať koncu rezervácie (I.04).'); }
+  const sp = autoPick({ from: p.from, to: p.to, ev: p.ev, large: p.large, exit: p.exit, lift: p.lift }, curUser());
+  if (!sp) { found = []; $('resForm').hidden = true; return renderResults('Žiadne vhodné miesto nie je dostupné.'); }
+  found = [sp]; chosen = sp.id; sel = sp.id; refresh(); renderResults('Systém vybral miesto ' + sp.id + ' (najviac splnených kritérií, pri rovnosti najnižšie číslo).'); showForm();
+}
+function showForm() {
+  if (!chosen) return;
+  $('resForm').hidden = false; $('chosenNo').textContent = 'č. ' + chosen;
+  if (!$('rEcv').dataset.u || $('rEcv').dataset.u !== S.userId) { $('rEcv').value = curUser().ecv; $('rEcv').dataset.u = S.userId; }
+  renderQuote();
+}
+function renderQuote() {
+  if (!chosen) return;
+  const p = params(), ecv = $('rEcv').value.trim().toUpperCase();
+  if (!(p.from < p.to)) { $('quote').innerHTML = '<span class="err">Začiatok musí predchádzať koncu rezervácie.</span>'; $('btnReserve').disabled = true; return; }
+  const q = quote(p.from, p.to, p.ev), err = validate({ uid: S.userId, ecv, spot: chosen, from: p.from, to: p.to, ev: p.ev });
+  $('quote').innerHTML = '<table><tr><td>Sadzba ' + eur(q.rate) + ' za hodinu' + (q.surcharge ? ' (prirážka ×' + RULE.sur + ', obsadenosť ' + Math.round(q.occ * 100) + ' %)' : ' (obsadenosť ' + Math.round(q.occ * 100) + ' %)') + '</td><td class="mono">' + eur(q.base) + '</td></tr>' +
+    (p.ev ? '<tr><td>Nabíjanie ' + eur(RULE.ev) + ' za hodinu</td><td class="mono">' + eur(q.evc) + '</td></tr>' : '') +
+    '<tr><td><strong>Odhadovaná cena (' + q.hours.toLocaleString('sk-SK') + ' h)</strong></td><td class="mono"><strong>' + eur(q.total) + '</strong></td></tr></table>' +
+    '<div class="muted">Záväzná cena sa uloží pri potvrdení.</div>' + (err ? '<div class="err">' + esc(err) + '</div>' : '');
+  $('btnReserve').disabled = !!err;
+}
+async function doReserve() {
+  const p = params(), ecv = $('rEcv').value.trim().toUpperCase(), o = { uid: S.userId, ecv, spot: chosen, from: p.from, to: p.to, ev: p.ev };
+  const err = validate(o); if (err) { $('resMsg').innerHTML = '<span class="err">' + esc(err) + '</span>'; return; }
+  const method = $('payMethod').value; let r;
+  if (method !== 'brana') r = reserveWithPackage(o, +method);
+  else {
+    const q = quote(p.from, p.to, p.ev), txn = newTxn();
+    if (!(await gate(q.total, 'rezervácia miesta ' + chosen))) { failedPayment(o, q.total, 'rezervácia', txn); $('resMsg').innerHTML = '<span class="err">Platba bola zamietnutá, rezervácia nevznikla.</span>'; refresh(); return; }
+    r = commit(o, { method: 'brana', txn });
+  }
+  if (!r.ok) { $('resMsg').innerHTML = '<span class="err">' + esc(r.err) + '</span>'; refresh(); return; }
+  $('resMsg').innerHTML = ''; $('resForm').hidden = true; found = []; chosen = null; $('results').innerHTML = '';
+  toast('Rezervácia č. ' + r.res.id + ' potvrdená, miesto ' + r.res.spot + ', ' + eur(r.res.price)); refresh();
+}
+function rpRender() {
+  const ok = rpPlan.filter(x => x.ok), total = r2(ok.reduce((a, x) => a + x.price, 0));
+  $('rpOut').innerHTML = rpPlan.length ? rpPlan.map(x => '<div class="item"><div class="main">' + fmt(x.from) + ' až ' + new Date(x.to).toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' }) + '</div>' +
+    (x.ok ? '<span class="pill ok">miesto ' + x.spot + ' · ' + eur(x.price) + '</span>' : '<span class="pill bad">' + esc(x.why) + '</span>') + '</div>').join('') +
+    (ok.length ? '<button class="primary" id="btnRpOk">Potvrdiť ' + ok.length + ' dostupných výskytov (' + eur(total) + ')</button>' : '') : '<p class="err">V zvolenom období nevznikol žiadny výskyt. Vyber aspoň jeden deň.</p>';
+  if ($('btnRpOk')) $('btnRpOk').onclick = async () => {
+    const txn = newTxn();
+    if (!(await gate(total, 'opakované rezervácie (' + ok.length + ')'))) { failedPayment(null, total, 'rezervácia', txn); toast('Platba zamietnutá, nevznikla žiadna rezervácia.'); refresh(); return; }
+    let made = 0, lost = 0; ok.forEach(x => { const r = commit(x.o, { method: 'brana', txn }); r.ok ? made++ : lost++; });
+    rpPlan = null; $('rpOut').innerHTML = '<p class="okmsg">Vytvorených rezervácií: ' + made + (lost ? ', nepodarilo sa: ' + lost : '') + '.</p>'; refresh();
+  };
+}
+function lamp(id, cls) { const a = $(id); a.className = 'arm ' + cls; if (cls === 'open') setTimeout(() => a.className = 'arm', 2200); }
+const devOpts = () => ({ camFail: $('camFail').checked, rampFault: $('rampFault').checked });
+function doIn() {
+  const ecv = $('camEcv').value.trim().toUpperCase(), r = entry(ecv, devOpts());
+  refresh(); lamp('armIn', r.ok ? 'open' : (r.fault ? 'fault' : ''));
+  toast(r.ok ? 'Vjazd povolený, rampa sa otvára.' : 'Vjazd zamietnutý: ' + r.why + '.');
+}
+async function doOut() {
+  const ecv = $('camEcv').value.trim().toUpperCase(), r = exitCar(ecv, devOpts());
+  refresh(); lamp('armOut', r.ok ? 'open' : (r.fault ? 'fault' : ''));
+  if (!r.ok) return toast('Výjazd zamietnutý: ' + r.why + '.');
+  toast(r.fee ? 'Rampa sa otvára. Prekročený čas ' + r.over + ' min, doplatok ' + eur(r.fee) + '.' : 'Výjazd povolený, rampa sa otvára.');
+  if (r.fee) { const ok = await gate(r.fee, 'doplatok za prekročený čas (' + ecv + ')'); payOvertime(ecv, r.fee, ok, newTxn()); refresh(); }
+}
+function syncDates() {
+  if (!(fromLocal($('sFrom').value) >= S.now)) $('sFrom').value = toLocal(S.now);
+  if (!(fromLocal($('sTo').value) > fromLocal($('sFrom').value))) $('sTo').value = toLocal(fromLocal($('sFrom').value) + 2 * H);
+  $('grFrom').value = toLocal(S.now); $('grTo').value = toLocal(S.now + 7 * DAY);
+  const d = new Date(S.now + DAY); $('rpStart').value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+function adv(min) { advance(min); syncDates(); refresh(); renderQuote(); }
+
+function init() {
+  newState();
+  $('user').innerHTML = USERS.map(u => '<option value="' + u.id + '">' + u.name + '</option>').join('');
+  $('days').innerHTML = [['Po', 1], ['Ut', 2], ['St', 3], ['Št', 4], ['Pi', 5], ['So', 6], ['Ne', 0]].map(d => '<label class="chk"><input type="checkbox" class="rpd" value="' + d[1] + '"' + (d[1] === 1 || d[1] === 3 ? ' checked' : '') + '>' + d[0] + '</label>').join('');
+  $('pkgType').innerHTML = Object.entries(PKG_TYPES).map(([k, t]) => '<option value="' + k + '">' + t.name + ', ' + eur(t.price) + '</option>').join('');
+  $('sFrom').value = ''; syncDates();
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { showTab(b.dataset.tab); refresh(); });
+  document.querySelectorAll('[data-adv]').forEach(b => b.onclick = () => adv(+b.dataset.adv));
+  $('btnSetTime').onclick = () => { const t = fromLocal($('setTime').value); if (!(t > S.now)) return toast('Čas ide iba dopredu.'); adv((t - S.now) / MIN); };
+  $('setTime').value = toLocal(S.now + 2 * H);
+  $('user').onchange = () => { S.userId = $('user').value; $('rEcv').dataset.u = ''; found = []; $('results').innerHTML = ''; $('resForm').hidden = true; chosen = null; refresh(); };
+  $('btnSearch').onclick = doSearch; $('btnAuto').onclick = doAuto; $('btnReserve').onclick = doReserve;
+  ['sFrom', 'sTo', 'sEv', 'rEcv'].forEach(id => $(id).addEventListener('input', renderQuote));
+  $('btnRpCheck').onclick = () => {
+    const days = [...document.querySelectorAll('.rpd:checked')].map(c => +c.value);
+    rpPlan = planRepeat(S.userId, curUser().ecv, { days, tFrom: $('rpFrom').value, tTo: $('rpTo').value, start: $('rpStart').value, weeks: Math.max(1, Math.min(8, +$('rpWeeks').value || 1)), ev: $('rpEv').checked });
+    rpRender();
+  };
+  $('btnBuyPkg').onclick = async () => {
+    const t = PKG_TYPES[$('pkgType').value], txn = newTxn(), ok = await gate(t.price, t.name);
+    const r = buyPackage(S.userId, $('pkgType').value, ok, txn); toast(r.ok ? 'Balík zakúpený.' : r.err); refresh();
+  };
+  $('btnAlert').onclick = () => { const r = addAlert(S.userId, $('alType').value, $('alChan').value); toast(r.ok ? 'Upozornenie nastavené.' : r.err); refresh(); };
+  $('btnAdOff').onclick = () => { setAvailable(+$('adSpot').value, false); refresh(); };
+  $('btnAdOn').onclick = () => { setAvailable(+$('adSpot').value, true); refresh(); };
+  $('btnGroup').onclick = () => {
+    const ids = $('grSpots').value.split(/[ ,;]+/).filter(Boolean).map(Number);
+    const r = reserveGroup(ids, $('grGroup').value, fromLocal($('grFrom').value), fromLocal($('grTo').value)); if (!r.ok) toast(r.err); refresh();
+  };
+  $('btnIn').onclick = doIn; $('btnOut').onclick = doOut;
+  $('btnFill').onclick = () => { fillGarage(); refresh(); renderQuote(); };
+  $('btnRace').onclick = () => { const r = raceTest(30); toast(r.spot ? 'Miesto ' + r.spot + ': vznikla ' + r.ok + ' rezervácia, ' + r.fail + ' žiadostí zamietnutých.' : 'Žiadne voľné miesto na test.'); refresh(); };
+  $('btnReset').onclick = () => { newState(); found = []; chosen = null; sel = 1; $('user').value = S.userId; $('results').innerHTML = ''; $('resForm').hidden = true; $('rpOut').innerHTML = ''; $('sFrom').value = ''; syncDates(); refresh(); toast('Simulácia obnovená.'); };
+  showTab('find'); refresh();
+}
+init();
+</script>
+</body></html>
